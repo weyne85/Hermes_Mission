@@ -19,7 +19,7 @@ TRN = TRN or {}
 local CFG = TRN.CFG
 local C = CFG.COMBINED
 
-local def = { id = C.id, title = C.title, cfg = C, modes = C.modes, startable = false }
+local def = { id = C.id, title = C.title, cfg = C, modes = C.modes }
 
 function def.info()
   local z = TRN.ZoneInfo(C.zone)
@@ -79,7 +79,7 @@ function def.OnRound(s)
   end
 
   -- Konvois (Bewegliche Ziele, Gelegenheitsziele)
-  for i = 1, 1 do   -- 1 Konvoi pro Runde (scaling [1,2] optional per difficulty)
+  for i = 1, (lv.convoyPool and 1 or 0) do   -- 1 Konvoi pro Runde, nur wenn die Stufe einen Pool definiert
     local cv = TRN.RandomPointInZone(C.zone)
     if not cv then return false, "Trigger zone '" .. C.zone .. "' is missing" end
     local name, err = TRN.Spawn(TRN.Pick(lv.convoyPool), cv)
@@ -110,8 +110,7 @@ function def.OnTick(s)
 
   -- ---- SEAD ----
   if not s.data.seadDone then
-    local target = Unit.getByName(s.data.seadTarget)
-    if target and not target:isExist() then
+    if #TRN.GroupAliveUnits(s.data.seadTarget) == 0 then
       s:Say("cc_sead_complete", string.format("SEAD destroyed. Round %d in %s.", s.rounds, s:ElapsedText()))
       s.data.seadDone = true
     end

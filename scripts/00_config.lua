@@ -161,6 +161,8 @@ TRN.CFG = {
     ag_complete     = { dur = 5, text = "Column destroyed. Air-to-ground exercise finished." },
     -- zone CC
     cc_briefing     = { dur = 6, text = "Combined threat in the area. Select SEAD or STRIKE via the F10 menu." },
+    cc_sead_complete   = { dur = 4, text = "SEAD target destroyed." },
+    cc_strike_complete = { dur = 4, text = "All strike targets destroyed." },
     cc_splash       = { dur = 3, text = "Splash one." },
     cc_complete     = { dur = 5, text = "Objective complete. New round starting shortly." },
   },

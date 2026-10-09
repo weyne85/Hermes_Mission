@@ -15,10 +15,10 @@ Geprüft in der Cloud-Umgebung (Linux, Python 3.13). Kein DCS verfügbar.
 
 - Quellen: `mrSkortch/MissionScriptingTools` (MIST), `FlightControl-Master/MOOSE_INCLUDE` (Moose), `ciribob/DCS-CTLD` (CTLD).
 - Hinweis aus dem CTLD-Kopf: CTLD verlangt die **mitgelieferte MIST-Version**. Die MIST-Version aus dem CTLD-Repo und die von `mrSkortch` müssen vor dem Einbau abgeglichen werden.
-- Nicht eingecheckt (Moose ca. 11 MB). Vorschlag: `libs/` in `.gitignore`, Download per Skript.
+- Nicht eingecheckt (Moose ca. 11 MB). `libs/` steht in `.gitignore`; ein Download-Skript fehlt noch.
 - Ob diese Stände mit deinem DCS Stable laufen, zeigt erst dein Test.
 
-## Gefundene Fehler im bestehenden Repo
+## Gefundene Fehler im bestehenden Repo (inzwischen behoben, siehe unten)
 
 Diese Fehler bestanden schon vor der Kampagnenarbeit:
 
@@ -43,6 +43,16 @@ Zur Verifikation nötig: eine mitgelieferte DCS-Kampagne (Ordner `Init` / Kampag
 
 ## Nächste Schritte
 
-1. Mock-Test reparieren (Entscheidung nötig: fehlendes `80_ambient.lua` neu schreiben oder Test/Config/Init anpassen).
-2. `types_extra.py` / Import in `build_miz.py` korrigieren, Build laufen lassen.
-3. `.cmp`-Beispiel von dir erhalten, dann Format festlegen.
+1. `.cmp`-Beispiel von dir erhalten, dann Format festlegen (Punkte 1 und 2 aus dem ersten Entwurf sind erledigt, siehe unten).
+
+## Behoben (nach M1)
+
+- `80_ambient.lua` neu geschrieben (RAT-Verkehr, Konvois), `tests/ambient_test.lua` ergänzt.
+- `build_miz.py`: Import von `Mi_24P` entfernt; Konvoi-Vorlagen `TRN_CONVOY_*` und Zonenpositionen `conv_*` ergänzt; `80_ambient.lua` in der Ladereihenfolge. Der Build läuft durch (Namensprüfung 44 von 44).
+- `plot_map.py`: ungültiger Marker `=` durch `+` ersetzt, Kategorien `zone_conv`, `zone_ctld`, `zone_csar` ergänzt.
+- `briefing.py`: Routenpunkt `AND` der Hubschrauber heißt jetzt `AND ZONE` wie in der Punktetabelle. Der Name `AND` stammt vermutlich aus einem Tippfehler für `AG`; er wurde nicht umbenannt, weil das README ihn so führt.
+- `mock_test.lua` neu geschrieben: lädt die echten Skripte und ersetzt nur DCS/Moose/MIST. 61 Prüfungen, 0 Fehler.
+- Fehler in den Zonenmodulen, die der neue Test aufgedeckt hat:
+  - `20_strike.lua`: `targetType` war vor der Definition aufgerufen, die Strike-Zone brach beim Start ab.
+  - `40_cc.lua`: `startable = false` entfernt (Combined hatte keine Start-Einträge im Menü); der Konvoi-Spawn nutzt `convoyPool`, das in der Config fehlt, und wird jetzt übersprungen; SEAD-Abschluss prüfte `Unit.getByName` mit einem Gruppennamen und trat nie ein.
+  - `00_config.lua`: Ansagen `cc_sead_complete` und `cc_strike_complete` fehlten.

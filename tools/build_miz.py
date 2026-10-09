@@ -29,7 +29,7 @@ from pathlib import Path
 import dcs
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import briefing
-from types_extra import CH_47Fbl1, Mi_24P
+import types_extra  # noqa: F401  (Typ-Erweiterungen fuer pydcs, gemeinsam mit plot_map.py)
 from dcs import countries, helicopters, planes, ships, statics, task, vehicles
 from dcs.mapping import Point
 from dcs.mission import Mission, StartType
@@ -56,6 +56,13 @@ POS = {
     "ag_end":       (-285000, 695000),   # Ziel (an einer Straße, >= 8 km von Start)
     # COMBINED (Zone 4)
     "cc_zone":      (-300000, 660000),   # Small box ca. 8 km Radius
+    # Belebung: Konvoizonen (an Strassen setzen, Start/Ziel je Konvoi = zwei verschiedene Zonen)
+    "conv_a":       (-282000, 655000),   # BLUE-Logistik, Raum Senaki-Kutaisi
+    "conv_b":       (-284000, 668000),
+    "conv_c":       (-290000, 662000),
+    "conv_d":       (-278000, 672000),
+    "conv_red_a":   (-262000, 695000),   # RED-Raid, oestlich der SEAD-Zone
+    "conv_red_b":   (-266000, 708000),
     # Wetter/Zeit (fest, klar)
     # Koalitionen: BLUE = USA, RED = Russland
     # Spieler-Slots (Client, BLUE): F/A-18C, F-16C (Kobuleti); AH-64D, Mi-24P (Senaki-Kolkhi)
@@ -204,7 +211,11 @@ def build(sounds_dir, out_path, extras=None):
         zone(f"TRN_CONV_{letter}", key, 800)
     zone("TRN_CONV_RED_A", "conv_red_a", 800)
     zone("TRN_CONV_RED_B", "conv_red_b", 800)
-    # (Konvois werden per Skript gesetzt, keine statischen Vorlagen noetig)
+    # Konvoi-Vorlagen (Late Activation): scripts/80_ambient.lua spawnt sie und schickt sie ueber die Strasse
+    ground_template("TRN_CONVOY_BLUE_1", "conv_a", [U.M978_HEMTT_Tanker, U.M_818, U.M_818], country=usa, dy=-1000)
+    ground_template("TRN_CONVOY_BLUE_2", "conv_a", [U.Hummer, U.M_818, U.M978_HEMTT_Tanker, U.Hummer], country=usa, dy=-1100)
+    ground_template("TRN_CONVOY_RED_1", "conv_red_a", [A.BMP_2, U.Ural_375, U.Ural_375], dy=-1000)
+    ground_template("TRN_CONVOY_RED_2", "conv_red_a", [A.BMP_2, U.KAMAZ_Truck, U.KAMAZ_Truck, A.BMP_2], dy=-1100)
 
     # ---------------------------------------------------------------- Speichern
     out_path.parent.mkdir(parents=True, exist_ok=True)

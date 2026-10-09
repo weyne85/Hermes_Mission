@@ -94,13 +94,13 @@ ROUTES = {
     "FA-18C_hornet": JET_FA18,
     "F-16C_50": JET_FA18,
     "AH-64D_BLK_II": [
-        ("AND", 400, 200, "RADIO", "Zone 3: air-to-ground"),
+        ("AND ZONE", 400, 200, "RADIO", "Zone 3: air-to-ground"),
         ("SEAD ZONE", 600, 250, "RADIO", "Zone 1: SEAD/DEAD"),
         ("ST STRIKE", 800, 300, "RADIO", "Zone 2: strike"),
         ("CC ZONE", 600, 250, "RADIO", "Zone 4: combined"),
     ],
     "Mi-24P": [
-        ("AND", 400, 200, "RADIO", "Zone 3: air-to-ground"),
+        ("AND ZONE", 400, 200, "RADIO", "Zone 3: air-to-ground"),
         ("SEAD ZONE", 600, 250, "RADIO", "Zone 1: SEAD/DEAD"),
         ("ST STRIKE", 800, 300, "RADIO", "Zone 2: strike"),
         ("CC ZONE", 600, 250, "RADIO", "Zone 4: combined"),

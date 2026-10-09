@@ -36,6 +36,9 @@ OUT = ROOT / "mission" / "map"
 # Kategorie -> (Beschriftung, Farbe)
 CAT = OrderedDict([
     ("zone_train", ("Zonen: SEAD/DEAD, Strike, Air-to-Ground, Combined (Exercise zones)", "#d62728")),
+    ("zone_conv", ("Zonen: Konvois (Start/Ziel)", "#8c564b")),
+    ("zone_ctld", ("Zonen: CTLD", "#2ca02c")),
+    ("zone_csar", ("Zonen: CSAR", "#ff7f0e")),
     ("range", ("Range-Ziele (feste Einheiten)", "#9467bd")),
     ("tpl_ground", ("Vorlagen Bodenziele (Late Activation)", "#e377c2")),
     ("tpl_sam", ("Vorlagen SAM (Late Activation)", "#b22222")),
@@ -187,7 +190,7 @@ def draw(items, airports, bounds, title, fname, label_zones=True, label_items=Tr
         col = CAT[it["cat"]][1]
         ax.add_patch(Circle((it["e"], it["n"]), it["radius"], fill=True, facecolor=col, alpha=0.12, edgecolor=col,
                             linewidth=1.5, linestyle="--", zorder=1))
-        ax.plot(it["e"], it["n"], marker="=", color=col, markersize=7, zorder=4)
+        ax.plot(it["e"], it["n"], marker="+", color=col, markersize=7, zorder=4)
 
     zone_items = [it for it in items if it["kind"] == "zone" and inb(it)]
     if label_zones:
