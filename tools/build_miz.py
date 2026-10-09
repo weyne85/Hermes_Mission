@@ -85,8 +85,9 @@ def P(m, key_or_xy, dx=0, dy=0):
     return Point(x + dx, y + dy, m.terrain)
 
 
-def build(sounds_dir, out_path, extras=None):
-    """extras: optional dict(kneeboards={Typ-ID: [PNG]}, pictures=[PNG]) fuer Phase 2."""
+def build(sounds_dir, out_path, extras=None, mission=None, libs_dir=None, allow_missing_libs=False):
+    """extras: optional dict(kneeboards={Typ-ID: [PNG]}, pictures=[PNG]) fuer Phase 2.
+    mission: optional Missionsdefinition aus tools/missions.py -> Slots, Skript-Trigger, Goals (tools/mission_builder.py)."""
     extras = extras or {}
     m = Mission(Caucasus())
     cfg = briefing.load_cfg()
@@ -216,6 +217,11 @@ def build(sounds_dir, out_path, extras=None):
     ground_template("TRN_CONVOY_BLUE_2", "conv_a", [U.Hummer, U.M_818, U.M978_HEMTT_Tanker, U.Hummer], country=usa, dy=-1100)
     ground_template("TRN_CONVOY_RED_1", "conv_red_a", [A.BMP_2, U.Ural_375, U.Ural_375], dy=-1000)
     ground_template("TRN_CONVOY_RED_2", "conv_red_a", [A.BMP_2, U.KAMAZ_Truck, U.KAMAZ_Truck, A.BMP_2], dy=-1100)
+
+    # ---------------------------------------------------------------- Kampagnenmission
+    if mission:
+        import mission_builder
+        mission_builder.apply_mission(m, usa, POS, mission, libs_dir or ROOT / "libs", allow_missing_libs)
 
     # ---------------------------------------------------------------- Speichern
     out_path.parent.mkdir(parents=True, exist_ok=True)

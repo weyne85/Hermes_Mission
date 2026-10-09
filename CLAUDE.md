@@ -10,6 +10,8 @@ Trainingsmission "Caucasus Strike" für DCS World (Karte Caucasus, BLUE vs RED):
 
 - Logiktest ohne DCS (aus dem Repo-Root): `lua5.1 tests/mock_test.lua` → erwartet `0 Fehler`. Einzelne Tests gibt es nicht; die Datei ist ein einziges Skript mit `check(cond, label)`.
 - Ambient-Test (RAT, Konvois; läuft ohne DCS): `lua5.1 tests/ambient_test.lua` → erwartet `0 failures`.
+- Missionsdateien prüfen: `lua5.1 tests/missions_test.lua` → erwartet `0 Fehler`.
+- Kampagnenmissionen bauen (nach `mission/missions/`): `python3 tools/build_missions.py [--only S1 J1] [--libs-dir libs]`. Braucht `libs/mist.lua` und `libs/Moose.lua`; baut je Mission die `.miz`, erzeugt `scripts/missions/<ID>.lua`, prüft Namen, Slots, Skript-Trigger und Mission Goals. Missionsdaten stehen in `tools/missions.py` (einzige Quelle, `scripts/missions/*.lua` sind generiert).
 - Mission bauen + Namensprüfung: `python3 tools/build_miz.py --sounds-dir /path/to/MOOSE_SOUND` (Exit 1, wenn ein `TRN_`-Name aus `00_config.lua` in der Mission fehlt).
 - Karten und `objekte.md` neu erzeugen: `python3 tools/plot_map.py`
 - Abhängigkeiten: `pip install pydcs matplotlib adjustText mgrs pillow`; `lua5.1` muss installiert sein.
@@ -24,6 +26,7 @@ Trainingsmission "Caucasus Strike" für DCS World (Karte Caucasus, BLUE vs RED):
 - **`70_mission.lua`** (Missionsmodus): `scripts/missions/<ID>.lua` setzt `TRN.MISSION` (Aufgaben, Stufen). Die Zonen starten dann ohne Besitzer als Einmal-Session (`Zone:Start(nil, level, mode, {single=true, onFinish=...})`), Ergebnis als User-Flag `TRN_<ID>_WIN` / `TRN_<ID>_FAIL`. Ohne `TRN.MISSION` oder mit `autostart=false` gilt das F10-Menü.
 - **`80_ambient.lua`** liefert `TRN.Rat_Init` (Moose RAT, KI-Transporter) und `TRN.Convoys_Init` (zufällige BLUE-/RED-Konvois aus `CFG.AMBIENT`); beides ruft `99_init.lua` auf. Es registriert keine Zone. Die Vorlagen `TRN_CONVOY_*` und Zonen `TRN_CONV_*` erzeugt `build_miz.py`.
 - **`02_audio.lua`** (Ansage-Queue, Text; Moose-Range/Airboss-Sounds optional) und **`03_menu.lua`** (F10-Menü je Spielergruppe) hängen am Zonen-Manager.
+- **Kampagnenmissionen**: `tools/missions.py` (Daten) → `tools/mission_builder.py` (Skript-Trigger, Slots mit Wegpunkten, Briefing, Mission Goals über `build_miz.build(..., mission=...)`) → `tools/build_missions.py` (Orchestrierung, Prüfung). Erfolg meldet das Goal über `c_flag_is_true("TRN_<ID>_WIN")`.
 - **`tools/`**: `build_miz.py` (pydcs → .miz, Trigger, Slots, `check_names()`), `briefing.py` (Briefing, Flugpläne, Kneeboards), `plot_map.py` (Karten), `types_extra.py` (Typ-Platzhalter, von Build- und Plot-Tool gemeinsam genutzt). Koordinaten im Build-Tool sind Platzhalter und müssen im Mission-Editor geprüft werden.
 - **Namens-Synchronität**: Namen in `00_config.lua`, im Mission-Editor und in `build_miz.py` müssen exakt übereinstimmen; `check_names()` ist das Prüf-Gate. Neue Zone oder neues Template ⇒ Config, `build_miz.py` und die README-Checkliste anpassen.
 - **`tests/mock_test.lua`** lädt die echten Skripte in Missionsreihenfolge und ersetzt nur DCS/Moose/MIST durch Attrappen (eigener Timer-Scheduler `advance(seconds)`, Welt-Modell) und prüft Menü, Sessions, Ansagen, Auto-Restart und Cleanup – nicht das Spielverhalten. `os` und `math.randomseed` werden bewusst auf `nil` gesetzt, um die DCS-Sandbox nachzubilden: im Skriptcode kein `os.*` verwenden.
