@@ -69,7 +69,7 @@ LOAD_ORDER = [
     "libs/mist.lua", "libs/Moose.lua", "libs/CTLD-i18n.lua", "libs/CTLD.lua",
     "scripts/00_config.lua", "scripts/01_core.lua", "scripts/02_audio.lua", "scripts/03_menu.lua",
     "scripts/10_sead.lua", "scripts/20_strike.lua", "scripts/30_ag.lua", "scripts/40_cc.lua",
-    "scripts/99_init.lua",
+    "scripts/80_ambient.lua", "scripts/99_init.lua",
 ]
 
 

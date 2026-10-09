@@ -73,6 +73,7 @@ caucasus-strike/
 │   ├── 20_strike.lua                  ← Zone 2 Strike
 │   ├── 30_ag.lua                      ← Zone 3 Air-to-Ground
 │   ├── 40_cc.lua                      ← Zone 4 Combined
+│   ├── 80_ambient.lua                 ← KI-Flugverkehr (RAT) und Konvois
 │   └── 99_init.lua                    ← initializer (loads last)
 ├── libs/                              ← mist.lua, Moose.lua, CTLD (unchanged)
 ├── tools/
@@ -90,7 +91,7 @@ caucasus-strike/
 
 ### 2. Load order (Mission Editor trigger)
 
-The Mission Editor must contain a **Trigger → MISSION START** with no condition and **13 × DO SCRIPT FILE**
+The Mission Editor must contain a **Trigger → MISSION START** with no condition and **14 × DO SCRIPT FILE**
 in exactly this order:
 
 1. `libs/mist.lua`
@@ -105,7 +106,8 @@ in exactly this order:
 10. `scripts/20_strike.lua`
 11. `scripts/30_ag.lua`
 12. `scripts/40_cc.lua`
-13. `scripts/99_init.lua`  ← **must run last**
+13. `scripts/80_ambient.lua`
+14. `scripts/99_init.lua`  ← **must run last**
 
 `99_init.lua` checks that the libraries are loaded and seeds the random generator; it then initializes the
 RAT (KI flight traffic) and Convoys. All zone modules register themselves via `TRN.RegisterZone(def)`.
