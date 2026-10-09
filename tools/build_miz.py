@@ -63,6 +63,11 @@ POS = {
     "conv_d":       (-278000, 672000),
     "conv_red_a":   (-262000, 695000),   # RED-Raid, oestlich der SEAD-Zone
     "conv_red_b":   (-266000, 708000),
+    # TRANSPORT (CTLD) und CSAR (Zone 5 und 6) - PLATZHALTER
+    "ctld_load":    (-280500, 648500),   # Ladegebiet nahe Senaki-Kolkhi
+    "ctld_drop":    (-292000, 640000),   # Vorposten am Brueckenkopf (Kueste, Raum Poti/Samtredia)
+    "csar_zone":    (-250000, 630000),   # Absetzstelle der Besatzung, Vorberge nordwestlich von Senaki
+    "mash":         (-281000, 646500),   # Rettungsstation am Flugplatz Senaki-Kolkhi
     # Wetter/Zeit (fest, klar)
     # Koalitionen: BLUE = USA, RED = Russland
     # Spieler-Slots (Client, BLUE): F/A-18C, F-16C (Kobuleti); AH-64D, Mi-24P (Senaki-Kolkhi)
@@ -175,6 +180,14 @@ def build(sounds_dir, out_path, extras=None, mission=None, libs_dir=None, allow_
     ground_template("TRN_CC_OBJ_4", "cc_zone", [A.BMP_2] * 2, dy=-1850)
     ground_template("TRN_CC_AAA_1", "cc_zone", [AD.ZSU_23_4_Shilka] * 2, dy=-1800)
     ground_template("TRN_CC_AAA_2", "cc_zone", [AD.Strela_10M3] * 2, dy=-1750)
+
+    # ---------------------------------------------------------------- Zone 5: TRANSPORT (CTLD), Zone 6: CSAR
+    zone("TRN_CTLD_LOAD", "ctld_load", 400)
+    zone("TRN_CTLD_DROP", "ctld_drop", 400)
+    zone("TRN_CSAR_ZONE", "csar_zone", 1500)
+    zone("TRN_MASH", "mash", 500)
+    ground_template("TRN_CTLD_TROOPS", "ctld_load", [vehicles.Infantry.Soldier_M4] * 4, country=usa, dy=-600)
+    ground_template("TRN_CSAR_PILOT", "csar_zone", [vehicles.Infantry.Soldier_M4], country=usa, dy=-600)
 
     # ---------------------------------------------------------------- Flugplaetze der Spieler: BLUE
     for name in ("Kobuleti", "Senaki-Kolkhi", "Kutaisi", "Batumi"):

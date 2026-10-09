@@ -103,9 +103,9 @@ local function killGroup(name)
 end
 
 -- Spielergruppe anlegen / entfernen
-local function addPlayer(groupName, point)
+local function addPlayer(groupName, point, typeName)
   local g = newGroup(groupName)
-  local u = newUnit(g, groupName .. "-1", "F/A-18C", point)
+  local u = newUnit(g, groupName .. "-1", typeName or "F/A-18C", point)
   players[#players + 1] = u
   return u
 end
@@ -148,6 +148,10 @@ local zoneTable = {
   TRN_AG_START = { x = 10000, z = 0, r = 500 },
   TRN_AG_END = { x = 18000, z = 0, r = 500 },
   TRN_CC_ZONE = { x = 20000, z = 0, r = 8000 },
+  TRN_CTLD_LOAD = { x = 2000, z = 500, r = 400 },
+  TRN_CTLD_DROP = { x = -8000, z = 0, r = 400 },
+  TRN_CSAR_ZONE = { x = 3000, z = -9000, r = 1500 },
+  TRN_MASH = { x = 1000, z = 2000, r = 500 },
 }
 trigger = {
   misc = { getZone = function(name)
@@ -235,9 +239,34 @@ function RAT:New(template)
   return o
 end
 
+-- Moose CTLD und CSAR: nur das, was die Skripte aufrufen; die Ereignisfunktionen (OnAfter...) setzen die Skripte
+local ctldObjs, csarObjs = {}, {}
+CTLD = { CargoZoneType = { LOAD = "load", DROP = "drop" } }
+CTLD_CARGO = { Enum = { TROOPS = "Troops" } }
+SMOKECOLOR = { Blue = 1, Red = 2 }
+function CTLD:New(_, prefixes)
+  local o = { prefixes = prefixes, cargo = {}, zones = {}, started = false }
+  function o:AddTroopsCargo(name, templates, typ, n)
+    self.cargo[#self.cargo + 1] = { name = name, templates = templates, n = n }
+    return self
+  end
+  function o:AddCTLDZone(name, typ) self.zones[#self.zones + 1] = { name = name, typ = typ }; return self end
+  function o:__Start() self.started = true end
+  ctldObjs[#ctldObjs + 1] = o
+  return o
+end
+CSAR = {}
+function CSAR:New(_, template)
+  local o = { template = template, spawns = {}, started = false }
+  function o:__Start() self.started = true end
+  function o:SpawnCSARAtZone(zone, _, description) self.spawns[#self.spawns + 1] = { zone = zone, description = description }; return self end
+  csarObjs[#csarObjs + 1] = o
+  return o
+end
+
 -- ------------------------------------------------------------------ Skripte laden (Ladereihenfolge der Mission)
 local SCRIPTS = {
-  "00_config", "01_core", "02_audio", "03_menu", "10_sead", "20_strike", "30_ag", "40_cc", "70_mission", "80_ambient", "99_init",
+  "00_config", "01_core", "02_audio", "03_menu", "10_sead", "20_strike", "30_ag", "40_cc", "50_ctld", "60_csar", "70_mission", "80_ambient", "99_init",
 }
 local function loadScripts()
   for _, name in ipairs(SCRIPTS) do
@@ -269,8 +298,8 @@ end
 local function test_load()
   print("\n-- Test 1: Laden und Registrierung")
   loadScripts()
-  check(#TRN.ZoneOrder == 4, "4 Zonen registriert")
-  for _, id in ipairs({ "SEAD", "STRIKE", "AG", "COMBINED" }) do
+  check(#TRN.ZoneOrder == 6, "6 Zonen registriert")
+  for _, id in ipairs({ "SEAD", "STRIKE", "AG", "COMBINED", "TRANSPORT", "RESCUE" }) do
     check(TRN.Zones[id] ~= nil, "Zone registriert: " .. id)
   end
   check(type(TRN.Rat_Init) == "function" and type(TRN.Convoys_Init) == "function", "Ambient-Funktionen vorhanden")
@@ -289,6 +318,10 @@ local function test_menu()
     "Strike: Start MEDIUM vorhanden")
   check(menuCommands["F18-1"] and menuCommands["F18-1"]["Training Zones/4 Combined/Start HARD/STRIKE"] ~= nil,
     "Combined: Start HARD / STRIKE vorhanden")
+  check(menuCommands["F18-1"] and menuCommands["F18-1"]["Training Zones/5 Transport (CTLD)/Start MEDIUM"] ~= nil,
+    "Transport: Start MEDIUM vorhanden")
+  check(menuCommands["F18-1"] and menuCommands["F18-1"]["Training Zones/6 CSAR/Start HARD"] ~= nil,
+    "CSAR: Start HARD vorhanden")
   settle()
   check(sawText("F18-1", "Welcome"), "Willkommensansage gesendet")
   advance(20)
@@ -518,8 +551,106 @@ local function test_mission_mode()
   TRN.MISSION = nil
 end
 
+local function test_transport()
+  print("\n-- Test 11: Transport (CTLD)")
+  addPlayer("MI24-1", { x = 0, y = 300, z = 500 }, "Mi-24P")
+  advance(TRN.CFG.MENU_SCAN + 2)
+  local z = TRN.Zones.TRANSPORT
+  local ok = z:Start("MI24-1", "MEDIUM")
+  check(ok and z:IsBusy(), "Start MEDIUM")
+  local c = ctldObjs[1]
+  check(c and c.started and #c.zones == 2 and #c.cargo == 1, "CTLD erzeugt: 2 Zonen, 1 Truppenladung, gestartet")
+  check(c and c.cargo[1].templates[1] == "TRN_CTLD_TROOPS" and c.cargo[1].n == 4, "Truppenvorlage und Ladungsgroesse")
+  settle()
+  check(sawText("MI24-1", "Deliver 8 troops"), "Briefing mit Sollzahl")
+
+  local drop = trigger.misc.getZone("TRN_CTLD_DROP").point
+  local function troops(point, n) return { GetVec3 = function() return point end, GetSize = function() return n end } end
+  c:OnAfterTroopsDeployed(nil, nil, nil, {}, {}, troops({ x = 0, y = 0, z = 0 }, 4))
+  advance(TRN.CFG.TICK + 1)
+  settle()
+  check(z.session.data.delivered == 0 and sawText("MI24-1", "outside"), "Abwurf ausserhalb zaehlt nicht")
+  c:OnAfterTroopsDeployed(nil, nil, nil, {}, {}, troops(drop, 4))
+  advance(TRN.CFG.TICK + 1)
+  settle()
+  check(z.session.data.delivered == 4 and sawText("MI24-1", "4 of 8 troops"), "erste Ladung gezaehlt")
+  check(z.session.state == "RUN", "noch nicht erfuellt")
+  c:OnAfterTroopsDeployed(nil, nil, nil, {}, {}, troops(drop, 4))
+  advance(TRN.CFG.TICK + 1)
+  settle()
+  check(sawText("MI24-1", "Transport task complete"), "zweite Ladung: Aufgabe erfuellt")
+  z:Stop(true)
+  check(#ctldObjs == 1, "CTLD nur einmal erzeugt")
+end
+
+local function test_rescue()
+  print("\n-- Test 12: CSAR")
+  local z = TRN.Zones.RESCUE
+  local ok = z:Start("MI24-1", "HARD")
+  check(ok and z:IsBusy(), "Start HARD")
+  local c = csarObjs[1]
+  check(c and c.started and #c.spawns == 1 and c.spawns[1].zone == "TRN_CSAR_ZONE", "CSAR erzeugt, Besatzung in TRN_CSAR_ZONE abgesetzt")
+  check(#z.session.tracked == 2, "Flak-Begleitschutz gespawnt (2 Gruppen)")
+  local pg = newGroup("PilotGroup1")
+  newUnit(pg, "PilotGroup1-1", "Soldier", { x = 3000, y = 0, z = -9000 })
+  c:OnAfterPilotDown(nil, nil, nil, {}, "243.0", "PilotGroup1", "N 42 E 41")
+  settle()
+  check(sawText("MI24-1", "Crew down") or sawText("MI24-1", "Falke 1-1"), "Absturzmeldung mit Frequenz")
+  c:OnAfterRescued(nil, nil, nil, {}, "MI24-1", 1)
+  advance(TRN.CFG.TICK + 1)
+  settle()
+  check(sawText("MI24-1", "Rescue task complete"), "Rettung erfuellt die Aufgabe")
+  z:Stop(true)
+
+  -- Besatzung geht verloren
+  z:Start("MI24-1", "EASY")
+  c:OnAfterPilotDown(nil, nil, nil, {}, "243.0", "PilotGroup1", "N 42 E 41")
+  killGroup("PilotGroup1")
+  advance(TRN.CFG.TICK + 1)
+  settle()
+  check(sawText("MI24-1", "crew was lost"), "verlorene Besatzung gemeldet")
+  z:Stop(true)
+end
+
+local function test_mission_types_events()
+  print("\n-- Test 13: Missionsmodus mit forTypes und Ereignissen")
+  stopAll()
+  addPlayer("F16-2", { x = 0, y = 5000, z = 9000 }, "F-16C_50")
+  removePlayer("MI24-1")
+  advance(5)
+
+  -- nur ein Jet anwesend: nur die Jet-Aufgabe gilt
+  TRN.MISSION = { id = "TST5", title = "Typen", startDelay = 5,
+    objectives = { { zone = "STRIKE", level = "EASY", forTypes = { "F-16C_50" } },
+                   { zone = "TRANSPORT", level = "EASY", forTypes = { "Mi-24P" } } },
+    events = { { after = 30, action = "shootdown" } } }
+  TRN.Mission_Init()
+  advance(15)
+  check(TRN.Zones.STRIKE:IsBusy() and not TRN.Zones.TRANSPORT:IsBusy(), "nur die zu den Mustern passende Aufgabe laeuft")
+  local before = #csarObjs
+  advance(40)
+  check(#csarObjs >= 1 and csarObjs[1].spawns[#csarObjs[1].spawns].description == "Falke 1-1", "Ereignis shootdown setzt Besatzung ab")
+  settle()
+  check(sawText("F16-2", "MAYDAY"), "Mayday-Ansage")
+  killAlive(TRN.Zones.STRIKE.session.data.targets)
+  advance(TRN.CFG.TICK + 1)
+  check(userFlags.TRN_TST5_WIN == 1, "Sieg ohne Transport-Aufgabe (kein Hubschrauber da)")
+  stopAll()
+
+  -- keine passende Aufgabe: Fehler und Misserfolg
+  TRN.MISSION = { id = "TST6", title = "Keine", startDelay = 5,
+    objectives = { { zone = "TRANSPORT", level = "EASY", forTypes = { "Mi-24P" } } } }
+  local nErr = #errors
+  TRN.Mission_Init()
+  advance(15)
+  check(#errors == nErr + 1 and userFlags.TRN_TST6_FAIL == 1, "keine passende Aufgabe: Misserfolg und ein Fehlerlog")
+  errors[#errors] = nil   -- absichtlicher Fehler, zaehlt nicht fuer die Gesamtpruefung
+  stopAll()
+  TRN.MISSION = nil
+end
+
 local function test_final()
-  print("\n-- Test 11: Gesamtlauf")
+  print("\n-- Test 14: Gesamtlauf")
   stopAll()
   check(#errors == 0, "keine env.error-Meldungen im gesamten Lauf")
 end
@@ -534,6 +665,9 @@ test_busy_timeout_owner()
 test_ag_route()
 test_single_session()
 test_mission_mode()
+test_transport()
+test_rescue()
+test_mission_types_events()
 test_final()
 
 print(string.format("\n===== %d Pruefungen, %d Fehler =====", checks, failures))

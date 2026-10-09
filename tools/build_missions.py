@@ -39,18 +39,34 @@ def verify(out, mission):
     if len(clients) != want:
         problems.append(f"{len(clients)} Spielerflugzeuge statt {want}")
     for g in clients:
-        if len(g.points) < 2 + len(mission["objectives"]):
+        if len(g.points) < 2 + len({o["zone"] for o in mission["objectives"]}):
             problems.append(f"{g.name}: zu wenige Wegpunkte ({len(g.points)})")
+
+    import zipfile
+    with zipfile.ZipFile(out) as z:
+        names = z.namelist()
+    for tid in mission["types"]:
+        prefix = f"KNEEBOARD/{mission_builder.TYPES[tid][0].id}/IMAGES/"
+        n = sum(1 for x in names if x.startswith(prefix))
+        if n < 3:
+            problems.append(f"{tid}: nur {n} Kneeboard-Seiten")
+
+    # Ladeliste muss alle Skripte unter scripts/ enthalten (sonst fehlt z. B. ein Zonenmodul in der Mission)
+    on_disk = {p.stem for p in (ROOT / "scripts").glob("*.lua")}
+    listed = set(mission_builder.SCRIPTS) | set(mission_builder.SCRIPTS_AFTER)
+    if on_disk != listed:
+        problems.append("Ladeliste passt nicht zu scripts/: " + ", ".join(sorted(on_disk ^ listed)))
 
     actions = [a for t in m.triggerrules.triggers for a in t.actions]
     n_scripts = sum(1 for a in actions if a.__class__.__name__ == "DoScriptFile")
     if n_scripts < len(mission_builder.SCRIPTS) + len(mission_builder.SCRIPTS_AFTER) + 1:
         problems.append(f"nur {n_scripts} DoScriptFile-Aktionen")
 
-    win, _ = mission_builder.flag_names(mission)
-    goals = m.goals.goals["blue"]
-    if not goals or not any(r.dict().get("flag") == win for gl in goals for r in gl.rules):
-        problems.append(f"Mission Goal fuer Flag {win} fehlt")
+    if mission_builder.autostart(mission):
+        win, _ = mission_builder.flag_names(mission)
+        goals = m.goals.goals["blue"]
+        if not goals or not any(r.dict().get("flag") == win for gl in goals for r in gl.rules):
+            problems.append(f"Mission Goal fuer Flag {win} fehlt")
     return problems
 
 

@@ -29,9 +29,14 @@ for _, file in ipairs(files) do
     chunk()
     local M = TRN.MISSION
     check(M and M.id .. ".lua" == file, file .. ": Id passt zum Dateinamen")
-    check(M and M.autostart == true and type(M.startDelay) == "number", file .. ": autostart und startDelay")
-    check(M and type(M.objectives) == "table" and #M.objectives > 0, file .. ": hat Aufgaben")
+    check(M and type(M.autostart) == "boolean" and type(M.startDelay) == "number", file .. ": autostart und startDelay")
+    check(M and type(M.objectives) == "table" and (M.autostart == false or #M.objectives > 0),
+      file .. ": hat Aufgaben (Tutorials ohne)")
+    for _, ev in ipairs(M and M.events or {}) do
+      check(type(ev.after) == "number" and type(ev.action) == "string", file .. ": Ereignis " .. tostring(ev.action))
+    end
     for i, o in ipairs(M and M.objectives or {}) do
+      if o.forTypes then check(type(o.forTypes[1]) == "string", string.format("%s: Aufgabe %d forTypes", file, i)) end
       local zc = CFG[o.zone]
       check(zc ~= nil and zc.id == o.zone, string.format("%s: Aufgabe %d Zone %s existiert", file, i, tostring(o.zone)))
       check(levels[o.level] == true and zc and zc.levels and zc.levels[o.level] ~= nil,

@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Projekt
 
-Trainingsmission "Caucasus Strike" für DCS World (Karte Caucasus, BLUE vs RED): vier Zonen (SEAD/DEAD, Strike, Air-to-Ground, Combined). Lua-Skripte laufen in der DCS-Mission-Sandbox (Moose + MIST + CTLD); Python-Tools (pydcs) bauen die .miz offline. Code-Kommentare und Log-/Testausgaben sind überwiegend Deutsch, Spieler-Ansagen Englisch.
+Trainingsmission "Caucasus Strike" für DCS World (Karte Caucasus, BLUE vs RED): sechs Zonen (SEAD/DEAD, Strike, Air-to-Ground, Combined, Transport/CTLD, CSAR). Lua-Skripte laufen in der DCS-Mission-Sandbox (Moose + MIST + CTLD); Python-Tools (pydcs) bauen die .miz offline. Code-Kommentare und Log-/Testausgaben sind überwiegend Deutsch, Spieler-Ansagen Englisch.
 
 ## Befehle
 
@@ -20,7 +20,7 @@ Trainingsmission "Caucasus Strike" für DCS World (Karte Caucasus, BLUE vs RED):
 
 ## Architektur
 
-- **Ladereihenfolge ist Vertrag**: Der Mission-Editor-Trigger (MISSION START, DO SCRIPT FILE) lädt strikt: mist → Moose → CTLD-i18n → CTLD → `00_config` → `01_core` → `02_audio` → `03_menu` → `10_sead` → `20_strike` → `30_ag` → `40_cc` → (`missions/<ID>`) → `70_mission` → `80_ambient` → `99_init`. Alle teilen den globalen Namespace `TRN`. `99_init.lua` muss zuletzt laufen: prüft Abhängigkeiten, seedet den Zufall (in der DCS-Sandbox fehlen `os` und teils `math.randomseed`) und initialisiert RAT/Konvois.
+- **Ladereihenfolge ist Vertrag**: Der Mission-Editor-Trigger (MISSION START, DO SCRIPT FILE) lädt strikt: mist → Moose → CTLD-i18n → CTLD → `00_config` → `01_core` → `02_audio` → `03_menu` → `10_sead` → `20_strike` → `30_ag` → `40_cc` → `50_ctld` → `60_csar` → (`missions/<ID>`) → `70_mission` → `80_ambient` → `99_init`. Alle teilen den globalen Namespace `TRN`. `99_init.lua` muss zuletzt laufen: prüft Abhängigkeiten, seedet den Zufall (in der DCS-Sandbox fehlen `os` und teils `math.randomseed`) und initialisiert RAT/Konvois.
 - **`00_config.lua` ist die einzige Quelle der Wahrheit** (`TRN.CFG`): alle `TRN_*`-Namen (Triggerzonen, Late-Activation-Gruppen, Statics), Frequenzen, Schwierigkeitsstufen (EASY/MEDIUM/HARD), Timeouts, Ansagetexte. Namen sind case-sensitiv; ein Tippfehler überspringt eine Zone oder spawnt das falsche Template.
 - **`01_core.lua`**: Logging, Geometrie, Spielergruppen, Spawn-Helfer und Zonen-Manager. Jedes Zonenmodul (`10_sead`, `20_strike`, `30_ag`, `40_cc`) registriert sich über `TRN.RegisterZone(def)`; `Zone:Start/Stop/_tick/_newRound` und `Session` (Tracking, Cleanup, Ansagen) steuern den Rundenablauf (Timeout, Auto-Restart nach `RESTART_DELAY`).
 - **`70_mission.lua`** (Missionsmodus): `scripts/missions/<ID>.lua` setzt `TRN.MISSION` (Aufgaben, Stufen). Die Zonen starten dann ohne Besitzer als Einmal-Session (`Zone:Start(nil, level, mode, {single=true, onFinish=...})`), Ergebnis als User-Flag `TRN_<ID>_WIN` / `TRN_<ID>_FAIL`. Ohne `TRN.MISSION` oder mit `autostart=false` gilt das F10-Menü.

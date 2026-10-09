@@ -1,6 +1,6 @@
 # Kampagnenplan — "Operation Iron Arrow" (DCS World, Caucasus)
 
-Status: **Entwurf zur Freigabe**. Alle Koordinaten sind Vorschläge und müssen im Mission Editor bestätigt werden.
+Status: **umgesetzt, in DCS ungetestet** (siehe Abschnitt "Umsetzungsstand"). Alle Koordinaten sind Vorschläge und müssen im Mission Editor bestätigt werden.
 
 ## 1. Eckdaten (aus dem Interview)
 
@@ -14,7 +14,7 @@ Status: **Entwurf zur Freigabe**. Alle Koordinaten sind Vorschläge und müssen 
 | Realismus | Mittel; feste Schwierigkeit, über die Kampagne ansteigend |
 | Bedingungen | Heißer Start, Tag, klares Wetter (Sommer) |
 | Sprache | Deutsch (Briefing, Ansagen, Kneeboards) |
-| Technik | `.miz` + `.cmp`, gebaut mit pydcs; Moose, MIST, CTLD, CSAR |
+| Technik | Einzelmissionen als `.miz`, gebaut mit pydcs (die `.cmp` baut der Nutzer); Moose (inkl. CTLD, CSAR), MIST |
 | Inhalte | Briefings mit Karten/Bildern, Kneeboards je Flugzeug, Tutorials |
 
 ### Umfang (entschieden)
@@ -105,7 +105,7 @@ Bestehender Code wird weiterverwendet, nicht ersetzt:
 | neu `scripts/60_csar.lua` | CSAR-Einbindung (H3, S2) | Besatzung, Rettungsfunk |
 | neu `scripts/70_campaign.lua` | Siegbedingung, Fortschrittsflags pro Mission | Fortschritt für die Kampagnenverkettung |
 | `tools/build_miz.py` | Mission bauen | je Mission parametrierbar (Zonen, Slots, Gegner) |
-| neu `tools/build_campaign.py` | `.cmp` aus Missionsliste erzeugen | Verkettung gemäß Abschnitt 3 |
+| neu `tools/build_missions.py`, `missions.py`, `mission_builder.py`, `kneeboards.py` | Einzelmissionen bauen (Slots, Goals, Kneeboards) | Die `.cmp` entfällt (baut der Nutzer) |
 | `tools/briefing.py` | Briefings, Kneeboards | deutsche Textbausteine pro Mission |
 | `tests/mock_test.lua` | Logiktest ohne DCS | zusätzliche Fälle für neue Module |
 
@@ -115,8 +115,8 @@ Dateistruktur (Ziel):
 campaign/
   missions/       ← je Mission eine Definition (Python/Lua)
   briefing/       ← Texte, Bilder, Kneeboard-Seiten
-  build/          ← generierte .miz und .cmp (nicht eingecheckt)
-libs/             ← mist.lua, Moose.lua, CTLD*.lua (nicht eingecheckt, siehe Risiken)
+  build/          ← generierte .miz (nicht eingecheckt)
+libs/             ← mist.lua, Moose.lua (nicht eingecheckt; CTLD/CSAR kommen aus Moose)
 ```
 
 ## 9. Risiken und Annahmen
@@ -139,3 +139,10 @@ libs/             ← mist.lua, Moose.lua, CTLD*.lua (nicht eingecheckt, siehe R
 7. **M6 – Finale:** S3, Balance, Feinschliff, Kneeboards und Karten.
 
 Nach jedem Meilenstein: Test durch dich, Korrektur, dann nächster Schritt.
+
+## 11. Umsetzungsstand
+
+- Gebaut sind alle 9 Missionen und beide Tutorials (T-J, T-H, S1, J1, J2, J3, H1, H2, S2, H3, S3) als `.miz`: `python3 tools/build_missions.py`.
+- Abweichungen vom Entwurf: Die A-10C II startet in Kobuleti (statt Kutaisi). H2 transportiert nur Truppen (keine Fracht-Kisten). In J2 bekämpft die A-10C II die Kolonne, J3 enthält SEAD und Strike. Aufgaben mit `for_types` gelten nur, wenn ein passendes Muster anwesend ist, damit gemeinsame Missionen auch solo lösbar bleiben (S3: Transport nur mit Hubschrauber).
+- Ergebnis je Mission: User-Flag `TRN_<ID>_WIN` / `TRN_<ID>_FAIL` plus Mission Goal (BLUE, Score 100) auf das WIN-Flag. Die Kampagnenverkettung (`.cmp`) macht der Nutzer.
+- Offen: Test in DCS (Flag im Goal, Moose-CTLD/CSAR, Straßenfahrt), Koordinaten im Mission Editor prüfen, Karten in den Kneeboards.

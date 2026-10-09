@@ -4,8 +4,12 @@
 --     id = "S1", title = "Auftakt",
 --     autostart = true,                      -- false: Menuemodus (Tutorials), diese Datei tut dann nichts
 --     startDelay = 15,                       -- Sekunden zwischen erstem Spieler und Start der Aufgaben
---     objectives = { { zone = "COMBINED", level = "EASY", mode = "STRIKE" }, { zone = "AG", level = "EASY" } },
+--     objectives = { { zone = "COMBINED", level = "EASY", mode = "STRIKE", forTypes = { "FA-18C_hornet" } },
+--                    { zone = "AG", level = "EASY" } },
+--     events = { { after = 300, action = "shootdown" } },   -- optional, Sekunden nach Aufgabenstart (TRN.MissionActions)
 --   }
+-- forTypes (optional): die Aufgabe gilt nur, wenn beim Start ein Spieler mit einem dieser DCS-Typnamen da ist
+-- (so bleibt eine gemeinsame Mission auch mit einem einzelnen Jet oder Hubschrauber loesbar).
 -- Alle Aufgaben starten ohne Besitzer (eine Runde). Erfolg = alle Aufgaben erfuellt, Misserfolg = eine Aufgabe
 -- scheitert (Ziel entkommen, Timeout, Fehler) oder alle Spieler sind verloren.
 -- Ergebnis: User-Flag TRN_<ID>_WIN bzw. TRN_<ID>_FAIL wird auf 1 gesetzt (Mission Goals / Kampagne werten es aus).
@@ -40,7 +44,7 @@ function TRN.Mission_Init()
 
   runId = runId + 1
   local myRun = runId
-  local state = { started = false, done = false, wins = 0, lost = 0, result = nil }
+  local state = { started = false, done = false, wins = 0, needed = #(M.objectives or {}), lost = 0, result = nil }
   TRN.Mission = { id = M.id, state = state }
 
   local objectives = M.objectives or {}
@@ -67,16 +71,60 @@ function TRN.Mission_Init()
     if state.done then return end
     if result == "win" then
       state.wins = state.wins + 1
-      if state.wins >= #objectives then finishMission(true) end
+      if state.wins >= state.needed then finishMission(true) end
     else
       finishMission(false, result)
     end
   end
 
+  -- DCS-Typnamen der anwesenden Spieler
+  local function presentTypes()
+    local set = {}
+    for _, p in pairs(TRN.PlayerGroups()) do
+      local ok, t = pcall(function() return p.unit:getTypeName() end)
+      if ok and t then set[t] = true end
+    end
+    return set
+  end
+
+  local function isActive(o, present)
+    if not o.forTypes then return true end
+    for _, t in ipairs(o.forTypes) do
+      if present[t] then return true end
+    end
+    return false
+  end
+
+  local function scheduleEvents()
+    for _, ev in ipairs(M.events or {}) do
+      TRN.After(ev.after or 0, function()
+        if state.done then return end
+        local fn = TRN.MissionActions and TRN.MissionActions[ev.action]
+        if not fn then
+          TRN.Error("Mission %s: unknown event action '%s'", tostring(M.id), tostring(ev.action))
+          return
+        end
+        local ok, err = pcall(fn, M, ev)
+        if not ok then TRN.Error("Mission %s: event '%s' failed: %s", tostring(M.id), tostring(ev.action), tostring(err)) end
+      end)
+    end
+  end
+
   local function startObjectives()
     if state.done then return end
-    TRN.Audio.TextAll("MISSION START: " .. tostring(M.title or M.id) .. ".")
+    local present = presentTypes()
+    local active = {}
     for _, o in ipairs(objectives) do
+      if isActive(o, present) then active[#active + 1] = o end
+    end
+    state.needed = #active
+    if #active == 0 then
+      TRN.Error("Mission %s: no objective applies to the present aircraft types", tostring(M.id))
+      finishMission(false, "error")
+      return
+    end
+    TRN.Audio.TextAll("MISSION START: " .. tostring(M.title or M.id) .. ".")
+    for _, o in ipairs(active) do
       if state.done then return end
       local z = TRN.Zones[o.zone]
       if not z then
@@ -90,6 +138,7 @@ function TRN.Mission_Init()
         return
       end
     end
+    scheduleEvents()
   end
 
   -- Start, sobald der erste Spieler da ist

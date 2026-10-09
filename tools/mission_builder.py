@@ -32,13 +32,23 @@ CRUISE = {
     "heli": (300, 220, "RADIO"),
 }
 
-# Zone -> Schluessel in build_miz.POS
-ZONE_POS = {"SEAD": "sead", "STRIKE": "strike", "AG": "ag_zone", "COMBINED": "cc_zone"}
-ZONE_LABEL = {"SEAD": "SEAD ZONE", "STRIKE": "STRIKE ZONE", "AG": "AG ZONE", "COMBINED": "CC ZONE"}
+# Zone -> Wegpunkte (Schluessel in build_miz.POS, Name des Wegpunkts)
+ZONE_WAYPOINTS = {
+    "SEAD": [("sead", "SEAD ZONE")],
+    "STRIKE": [("strike", "STRIKE ZONE")],
+    "AG": [("ag_zone", "AG ZONE")],
+    "COMBINED": [("cc_zone", "CC ZONE")],
+    "TRANSPORT": [("ctld_load", "LOAD ZONE"), ("ctld_drop", "DROP ZONE")],
+    "RESCUE": [("csar_zone", "CSAR ZONE"), ("mash", "MASH")],
+}
 
 LIBS = ["mist.lua", "Moose.lua"]
-SCRIPTS = ["00_config", "01_core", "02_audio", "03_menu", "10_sead", "20_strike", "30_ag", "40_cc"]
+SCRIPTS = ["00_config", "01_core", "02_audio", "03_menu", "10_sead", "20_strike", "30_ag", "40_cc", "50_ctld", "60_csar"]
 SCRIPTS_AFTER = ["70_mission", "80_ambient", "99_init"]
+
+
+def autostart(mission):
+    return mission.get("autostart", True)
 
 
 def mission_lua(mission):
@@ -48,14 +58,21 @@ def mission_lua(mission):
         fields = [f'zone = "{o["zone"]}"', f'level = "{o["level"]}"']
         if o.get("mode"):
             fields.append(f'mode = "{o["mode"]}"')
+        if o.get("for_types"):
+            ids = ", ".join(f'"{TYPES[k][0].id}"' for k in o["for_types"])
+            fields.append(f"forTypes = {{ {ids} }}")
         objs.append("    { " + ", ".join(fields) + " },")
+    events = ""
+    if mission.get("events"):
+        evs = "\n".join(f'    {{ after = {e["after"]}, action = "{e["action"]}" }},' for e in mission["events"])
+        events = "  events = {\n" + evs + "\n  },\n"
     return (
         "-- GENERIERT von tools/build_missions.py aus tools/missions.py - nicht von Hand aendern.\n"
         "TRN = TRN or {}\n"
         "TRN.MISSION = {\n"
-        f'  id = "{mission["id"]}", title = "{mission["title"]}", autostart = true, '
+        f'  id = "{mission["id"]}", title = "{mission["title"]}", autostart = {str(autostart(mission)).lower()}, '
         f'startDelay = {mission.get("startDelay", 10)},\n'
-        "  objectives = {\n" + "\n".join(objs) + "\n  },\n}\n"
+        "  objectives = {\n" + "\n".join(objs) + "\n  },\n" + events + "}\n"
     )
 
 
@@ -96,20 +113,39 @@ def add_slots(m, usa, pos, mission):
     for tid in mission["types"]:
         ptype, label, base, kind = TYPES[tid]
         airport = m.terrain.airports[base]
-        alt, speed, alt_type = CRUISE[kind]
         for n in range(1, SLOTS_PER_TYPE + 1):
             fg = m.flight_group_from_airport(usa, f"{label} Client {n}", ptype, airport,
                                              start_type=StartType.Warm, group_size=1)
             fg.units[0].set_client()
-            seen = set()
-            for o in mission["objectives"]:
-                if o["zone"] in seen:
-                    continue
-                seen.add(o["zone"])
-                x, y = pos[ZONE_POS[o["zone"]]]
-                wp = fg.add_waypoint(Point(x, y, m.terrain), alt, speed, name=ZONE_LABEL[o["zone"]])
-                wp.alt_type = alt_type
+            for name, wp_alt, wp_speed, wp_alt_type, (x, y) in waypoint_list(mission, kind, pos):
+                wp = fg.add_waypoint(Point(x, y, m.terrain), wp_alt, wp_speed, name=name)
+                wp.alt_type = wp_alt_type
             fg.land_at(airport)
+
+
+def waypoint_list(mission, kind, pos):
+    """Wegpunkte der Mission fuer eine Art: Liste (Name, Hoehe m, km/h, Hoehentyp, (x, y))."""
+    alt, speed, alt_type = CRUISE[kind]
+    out, seen = [], set()
+    for o in mission["objectives"]:
+        if o["zone"] in seen:
+            continue
+        seen.add(o["zone"])
+        for key, label in ZONE_WAYPOINTS[o["zone"]]:
+            out.append((label, alt, speed, alt_type, tuple(pos[key])))
+    return out
+
+
+def add_kneeboards(m, pos, mission, outdir):
+    import briefing
+    import kneeboards
+    geo = briefing.Geo(m.terrain, pos)
+    for tid in mission["types"]:
+        ptype, label, base, kind = TYPES[tid]
+        pages = kneeboards.build_pages(mission, tid, label, base, waypoint_list(mission, kind, pos), geo,
+                                       m.terrain.airports, Path(outdir) / mission["id"])
+        for page in pages:
+            m.add_aircraft_kneeboard(ptype, page)
 
 
 def add_briefing(m, mission):
@@ -132,5 +168,7 @@ def add_goals(m, mission):
 def apply_mission(m, usa, pos, mission, libs_dir, allow_missing_libs=False):
     add_briefing(m, mission)
     add_slots(m, usa, pos, mission)
-    add_goals(m, mission)
+    if autostart(mission):
+        add_goals(m, mission)
+    add_kneeboards(m, pos, mission, ROOT / "mission" / "kneeboard")
     add_scripts(m, mission, libs_dir, allow_missing_libs)
