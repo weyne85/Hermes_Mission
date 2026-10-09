@@ -105,8 +105,7 @@ local function typeList(groupName)
 end
 
 function def.OnTick(s)
-  local player = TRN.PlayerUnit(s.group)
-  if not player then return end
+  if #TRN.SessionPlayers(s) == 0 then return end
 
   -- ---- SEAD ----
   if not s.data.seadDone then

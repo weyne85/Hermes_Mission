@@ -37,6 +37,10 @@ else
   ok, err = pcall(TRN.Convoys_Init)
   if not ok then TRN.Error("Convoys init: %s", tostring(err)) end
 
+  -- Missionsmodus (TRN.MISSION aus scripts/missions/<ID>.lua): Aufgaben starten selbst
+  ok, err = pcall(TRN.Mission_Init)
+  if not ok then TRN.Error("Mission init: %s", tostring(err)) end
+
   -- Alles aufräumen? Nein -- alle Zonen registrieren (im Modulen via TRN.RegisterZone)
   TRN.Menu.Start()
   TRN.Log("Caucasus strike v%s ready (%d zones)", CFG.VERSION, #TRN.ZoneOrder)

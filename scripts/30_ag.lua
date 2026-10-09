@@ -41,11 +41,16 @@ function def.OnRound(s)
   s.data.escorts = {}
   local lines = { "CONVOY TARGETS:" }
 
+  s.data.escaped = {}
   for i = 1, lv.count do
-    local vec2 = TRN.RandomPointInZone(C.zone)
-    if not vec2 then return false, "Trigger zone '" .. C.zone .. "' is missing" end
+    local vec2 = TRN.RandomPointInZone(C.startZone)
+    if not vec2 then return false, "Trigger zone '" .. C.startZone .. "' is missing" end
+    local goal = TRN.RandomPointInZone(C.endZone)
+    if not goal then return false, "Trigger zone '" .. C.endZone .. "' is missing" end
     local name, err = TRN.Spawn(TRN.Pick(lv.pool), vec2)
     if not name then return false, err end
+    local routed, routeErr = TRN.SendRoute(name, vec2, goal, (lv.speedKmh or 30) / 3.6)
+    if not routed then TRN.Error("AG route failed for %s: %s", name, tostring(routeErr)) end
     s:Track(name)
     s.data.targets[#s.data.targets + 1] = name
     lines[#lines + 1] = string.format("Target %d: %s, MGRS %s", i, typeList(name),
@@ -72,10 +77,32 @@ local function targetType(groupName)
 end
 
 function def.OnTick(s)
-  local alive = s:CountAlive(s.data.targets, function(left)
+  -- Gruppen, die die Zielzone erreichen, gelten als entkommen
+  for _, name in ipairs(s.data.targets) do
+    if not s.data.escaped[name] then
+      for _, u in ipairs(TRN.GroupAliveUnits(name)) do
+        if TRN.InZone(u:getPoint(), C.endZone) then s.data.escaped[name] = true; break end
+      end
+    end
+  end
+
+  s:CountAlive(s.data.targets, function(left)
     s:Say("ag_hit", string.format("Targets remaining: %d.", left))
   end)
-  if alive == 0 then
+
+  local active, escaped = 0, 0
+  for _, name in ipairs(s.data.targets) do
+    if s.data.escaped[name] then
+      escaped = escaped + 1
+    elseif #TRN.GroupAliveUnits(name) > 0 then
+      active = active + 1
+    end
+  end
+  if active == 0 then
+    if escaped > 0 then
+      s:Say("ag_escaped")
+      return "failed"
+    end
     s:Say("ag_complete", string.format("Round %d finished in %s.", s.rounds, s:ElapsedText()))
     return "done"
   end

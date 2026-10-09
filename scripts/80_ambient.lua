@@ -59,25 +59,6 @@ local function activeCount(state)
   return #alive
 end
 
--- Fahrbefehl: von "from" nach "to" ueber die Strasse (vec2 = { x =, y = }, speedMs in m/s)
-local function sendRoute(groupName, from, to, speedMs)
-  local g = Group and Group.getByName(groupName)
-  if not g or not g:isExist() then return false, "group missing" end
-  local function wp(p)
-    return {
-      x = p.x, y = p.y, type = "Turning Point", action = "On Road",
-      speed = speedMs, speed_locked = true, ETA = 0, ETA_locked = false,
-      alt = 0, alt_type = "BARO", formation_template = "",
-      task = { id = "ComboTask", params = { tasks = {} } },
-    }
-  end
-  local ok, err = pcall(function()
-    g:getController():setTask({ id = "Mission", params = { route = { points = { wp(from), wp(to) } } } })
-  end)
-  if not ok then return false, tostring(err) end
-  return true
-end
-
 local function spawnConvoy(state)
   local d = state.def
   if activeCount(state) >= (d.maxActive or 1) then return end
@@ -109,7 +90,7 @@ local function spawnConvoy(state)
   state.warned = false
 
   local speed = TRN.RandomIn(d.speedKmh) * KMH_TO_MS
-  local okRoute, routeErr = sendRoute(name, from, to, speed)
+  local okRoute, routeErr = TRN.SendRoute(name, from, to, speed)
   if not okRoute then TRN.Error("Convoy '%s' route failed: %s", d.id, tostring(routeErr)) end
 
   state.active[#state.active + 1] = name

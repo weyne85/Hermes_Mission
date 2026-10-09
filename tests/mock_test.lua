@@ -47,6 +47,7 @@ end
 -- ------------------------------------------------------------------ Welt-Modell
 local units, groups, players = {}, {}, {}
 local outputs, logs, errors = {}, {}, {}
+local userFlags = {}
 local nextGroupId = 100
 
 env = {
@@ -155,7 +156,10 @@ trigger = {
     if not z then return nil end
     return { point = { x = z.x, y = 0, z = z.z }, radius = z.r }
   end },
-  action = { outTextForGroup = function(id, text) outputs[#outputs + 1] = { id = id, text = text } end },
+  action = {
+    outTextForGroup = function(id, text) outputs[#outputs + 1] = { id = id, text = text } end,
+    setUserFlag = function(name, value) userFlags[name] = value end,
+  },
 }
 
 mist = {
@@ -233,7 +237,7 @@ end
 
 -- ------------------------------------------------------------------ Skripte laden (Ladereihenfolge der Mission)
 local SCRIPTS = {
-  "00_config", "01_core", "02_audio", "03_menu", "10_sead", "20_strike", "30_ag", "40_cc", "80_ambient", "99_init",
+  "00_config", "01_core", "02_audio", "03_menu", "10_sead", "20_strike", "30_ag", "40_cc", "70_mission", "80_ambient", "99_init",
 }
 local function loadScripts()
   for _, name in ipairs(SCRIPTS) do
@@ -419,8 +423,103 @@ local function test_busy_timeout_owner()
   check(not st:IsBusy(), "Zone schliesst, wenn Besitzer weg ist")
 end
 
+local function test_ag_route()
+  print("\n-- Test 8: Air-to-Ground Fahrt und Entkommen")
+  local z = TRN.Zones.AG
+  z:Start("F18-1", "EASY")
+  local s = z.session
+  local name = s and s.data.targets[1]
+  local task = name and groups[name].task
+  check(task ~= nil and #task.params.route.points == 2, "Fahrbefehl mit 2 Wegpunkten gesetzt")
+  check(task and task.params.route.points[2].action == "On Road", "Fahrt ueber die Strasse")
+  check(task and math.abs(task.params.route.points[1].speed - 20 / 3.6) < 0.01, "Tempo EASY 20 km/h")
+  -- Fahrzeug erreicht die Zielzone
+  groups[name].units[1].point = { x = 18000, y = 0, z = 0 }
+  advance(TRN.CFG.TICK + 1)
+  settle()
+  check(sawText("F18-1", "end line"), "Entkommen gemeldet")
+  check(s.state == "WAIT", "Runde endet (Menuemodus: Neustart folgt)")
+  z:Stop(true)
+end
+
+local function test_single_session()
+  print("\n-- Test 9: Einmal-Session ohne Besitzer")
+  local z = TRN.Zones.SEAD
+  local results = {}
+  z:Start(nil, "EASY", "DEAD", { single = true, onFinish = function(r) results[#results + 1] = r end })
+  check(z:IsBusy() and z:Owner() == nil, "Zone laeuft ohne Besitzer")
+  local s = z.session
+  settle()
+  check(sawText("F18-1", "Threat radar"), "Radarwarnung geht an Spielergruppe")
+  killGroup(s.data.main)
+  advance(TRN.CFG.TICK + 1)
+  check(#results == 1 and results[1] == "win", "onFinish(win) genau einmal")
+  check(s.state == "FINISHED", "Session beendet")
+  advance(TRN.CFG.RESTART_DELAY + 30)
+  check(z.session.rounds == 1 and #results == 1, "kein Auto-Restart")
+  check(groups[s.data.main].alive, "Wracks bleiben stehen (kein Aufraeumen)")
+  z:Stop(true)
+
+  results = {}
+  local st = TRN.Zones.STRIKE
+  st:Start(nil, "EASY", nil, { single = true, onFinish = function(r) results[#results + 1] = r end })
+  advance(TRN.CFG.STRIKE.roundTimeout + 60)
+  check(#results == 1 and results[1] == "timeout", "Timeout meldet timeout")
+  st:Stop(true)
+end
+
+local function test_mission_mode()
+  print("\n-- Test 10: Missionsmodus (Flags, Erfolg, Misserfolg, Totalverlust)")
+  stopAll()
+
+  -- Erfolg: zwei Aufgaben
+  TRN.MISSION = { id = "TST", title = "Test", autostart = true, startDelay = 5,
+    objectives = { { zone = "STRIKE", level = "EASY" }, { zone = "AG", level = "EASY" } } }
+  check(TRN.IsMissionMode(), "Missionsmodus erkannt")
+  TRN.Mission_Init()
+  advance(15)
+  check(TRN.Zones.STRIKE:IsBusy() and TRN.Zones.AG:IsBusy(), "beide Aufgaben gestartet")
+  settle()
+  check(sawText("F18-1", "MISSION START"), "Startansage")
+  killAlive(TRN.Zones.STRIKE.session.data.targets)
+  advance(TRN.CFG.TICK + 1)
+  check(userFlags.TRN_TST_WIN == nil, "noch kein Sieg nach einer Aufgabe")
+  killAlive(TRN.Zones.AG.session.data.targets)
+  advance(TRN.CFG.TICK + 1)
+  check(userFlags.TRN_TST_WIN == 1 and userFlags.TRN_TST_FAIL == nil, "Flag TRN_TST_WIN gesetzt")
+  settle()
+  check(sawText("F18-1", "MISSION COMPLETE"), "Erfolgsansage")
+  stopAll()
+
+  -- Misserfolg: Timeout
+  TRN.MISSION = { id = "TST2", title = "Test 2", startDelay = 5, objectives = { { zone = "STRIKE", level = "EASY" } } }
+  TRN.Mission_Init()
+  advance(15)
+  advance(TRN.CFG.STRIKE.roundTimeout + 60)
+  check(userFlags.TRN_TST2_FAIL == 1 and userFlags.TRN_TST2_WIN == nil, "Flag TRN_TST2_FAIL bei Timeout")
+  settle()
+  check(sawText("F18-1", "MISSION FAILED"), "Misserfolgsansage")
+  stopAll()
+
+  -- Misserfolg: Totalverlust
+  TRN.MISSION = { id = "TST3", title = "Test 3", startDelay = 5, objectives = { { zone = "STRIKE", level = "EASY" } } }
+  TRN.Mission_Init()
+  advance(15)
+  removePlayer("F18-1")
+  advance(TRN.CFG.TICK * 4)
+  check(userFlags.TRN_TST3_FAIL == 1, "Flag TRN_TST3_FAIL bei Totalverlust")
+  stopAll()
+
+  -- Menuemodus (autostart = false): Init tut nichts
+  TRN.MISSION = { id = "TST4", autostart = false, objectives = { { zone = "STRIKE", level = "EASY" } } }
+  TRN.Mission_Init()
+  advance(30)
+  check(not TRN.Zones.STRIKE:IsBusy() and not TRN.IsMissionMode(), "autostart = false startet nichts")
+  TRN.MISSION = nil
+end
+
 local function test_final()
-  print("\n-- Test 8: Gesamtlauf")
+  print("\n-- Test 11: Gesamtlauf")
   stopAll()
   check(#errors == 0, "keine env.error-Meldungen im gesamten Lauf")
 end
@@ -432,6 +531,9 @@ test_strike()
 test_ag()
 test_combined()
 test_busy_timeout_owner()
+test_ag_route()
+test_single_session()
+test_mission_mode()
 test_final()
 
 print(string.format("\n===== %d Pruefungen, %d Fehler =====", checks, failures))

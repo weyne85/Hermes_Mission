@@ -47,7 +47,7 @@ function def.OnRound(s)
   if not main then return false, err end
   s:Track(main)
   s.data.main = main
-  s.data.warned = false
+  s.data.warned = {}   -- Gruppenname -> true, wenn die Radarwarnung dieser Gruppe schon kam
 
   -- Begleitschutz in der Nahe
   for _, tpl in ipairs(lv.escorts or {}) do
@@ -86,17 +86,18 @@ local function radarsAlive(s)
 end
 
 function def.OnTick(s)
-  local player = TRN.PlayerUnit(s.group)
-
-  -- Radar-Warnung (einmalig je Runde)
-  if player and not s.data.warned then
-    local first = TRN.GroupAliveUnits(s.data.main)[1]
-    if first then
-      local pp, sp = player:getPoint(), first:getPoint()
-      local dist = TRN.Dist2D(pp, sp)
-      if dist <= C.threatWarnRangeKm * 1000 then
-        s.data.warned = true
-        s:Say("se_radar", string.format("Bearing %03d, %d nm.", TRN.Bearing(pp, sp), math.floor(TRN.ToNm(dist) + 0.5)))
+  -- Radar-Warnung (einmalig je Runde und Spielergruppe)
+  local first = TRN.GroupAliveUnits(s.data.main)[1]
+  if first then
+    for _, p in ipairs(TRN.SessionPlayers(s)) do
+      if not s.data.warned[p.name] then
+        local pp, sp = p.unit:getPoint(), first:getPoint()
+        local dist = TRN.Dist2D(pp, sp)
+        if dist <= C.threatWarnRangeKm * 1000 then
+          s.data.warned[p.name] = true
+          TRN.Audio.Say(p.name, "se_radar",
+            string.format("Bearing %03d, %d nm.", TRN.Bearing(pp, sp), math.floor(TRN.ToNm(dist) + 0.5)))
+        end
       end
     end
   end
@@ -134,10 +135,12 @@ function handler:onEvent(e)
     if not mine then return end
     if e.weapon and e.weapon.getDesc and e.weapon:getDesc().category ~= Weapon.Category.MISSILE then return end
 
-    local player = TRN.PlayerUnit(s.group)
-    if not player then return end
-    local pp, sp = player:getPoint(), shooter:getPoint()
-    s:Say("se_launch", string.format("Bearing %03d, %d nm.", TRN.Bearing(pp, sp), math.floor(TRN.ToNm(TRN.Dist2D(pp, sp)) + 0.5)))
+    local sp = shooter:getPoint()
+    for _, p in ipairs(TRN.SessionPlayers(s)) do
+      local pp = p.unit:getPoint()
+      TRN.Audio.Say(p.name, "se_launch",
+        string.format("Bearing %03d, %d nm.", TRN.Bearing(pp, sp), math.floor(TRN.ToNm(TRN.Dist2D(pp, sp)) + 0.5)))
+    end
   end)
   if not ok then TRN.Error("SEAD shot handler: %s", tostring(err)) end
 end

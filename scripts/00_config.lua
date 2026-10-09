@@ -75,9 +75,9 @@ TRN.CFG = {
     startZone = "TRN_AG_START",        -- Triggerzone: Startpunkte der Zielfahrzeuge (an einer Straße)
     endZone = "TRN_AG_END",            -- Triggerzone: Ziel (an einer Straße, >= 8 km von Start)
     levels = {
-      EASY   = { pool = { "TRN_AG_VEH_1", "TRN_AG_VEH_2" }, count = 1,  escorts = {} },
-      MEDIUM = { pool = { "TRN_AG_VEH_1", "TRN_AG_VEH_2", "TRN_AG_VEH_3" }, count = 2, escorts = {} },
-      HARD   = { pool = { "TRN_AG_VEH_1", "TRN_AG_VEH_2", "TRN_AG_VEH_3", "TRN_AG_VEH_4" }, count = 2,
+      EASY   = { pool = { "TRN_AG_VEH_1", "TRN_AG_VEH_2" }, count = 1,  speedKmh = 20, escorts = {} },
+      MEDIUM = { pool = { "TRN_AG_VEH_1", "TRN_AG_VEH_2", "TRN_AG_VEH_3" }, count = 2, speedKmh = 35, escorts = {} },
+      HARD   = { pool = { "TRN_AG_VEH_1", "TRN_AG_VEH_2", "TRN_AG_VEH_3", "TRN_AG_VEH_4" }, count = 2, speedKmh = 50,
                  escorts = { "TRN_AG_AAA_1" } },
     },
   },
@@ -158,6 +158,7 @@ TRN.CFG = {
     -- zone AG
     ag_briefing     = { dur = 6, text = "Ground targets in the area. Destroy the convoy as briefed." },
     ag_hit          = { dur = 3, text = "Vehicle destroyed." },
+    ag_escaped      = { dur = 5, text = "A vehicle reached the end line. Exercise failed." },
     ag_complete     = { dur = 5, text = "Column destroyed. Air-to-ground exercise finished." },
     -- zone CC
     cc_briefing     = { dur = 6, text = "Combined threat in the area. Select SEAD or STRIKE via the F10 menu." },
