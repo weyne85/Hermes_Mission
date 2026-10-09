@@ -29,7 +29,7 @@ from pathlib import Path
 import dcs
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import briefing
-from types_extra import CH_47Fbl1, Mi_24P
+import types_extra  # noqa: F401  (Typ-Erweiterungen fuer pydcs, gemeinsam mit plot_map.py)
 from dcs import countries, helicopters, planes, ships, statics, task, vehicles
 from dcs.mapping import Point
 from dcs.mission import Mission, StartType
@@ -56,6 +56,18 @@ POS = {
     "ag_end":       (-285000, 695000),   # Ziel (an einer Straße, >= 8 km von Start)
     # COMBINED (Zone 4)
     "cc_zone":      (-300000, 660000),   # Small box ca. 8 km Radius
+    # Belebung: Konvoizonen (an Strassen setzen, Start/Ziel je Konvoi = zwei verschiedene Zonen)
+    "conv_a":       (-282000, 655000),   # BLUE-Logistik, Raum Senaki-Kutaisi
+    "conv_b":       (-284000, 668000),
+    "conv_c":       (-290000, 662000),
+    "conv_d":       (-278000, 672000),
+    "conv_red_a":   (-262000, 695000),   # RED-Raid, oestlich der SEAD-Zone
+    "conv_red_b":   (-266000, 708000),
+    # TRANSPORT (CTLD) und CSAR (Zone 5 und 6) - PLATZHALTER
+    "ctld_load":    (-280500, 648500),   # Ladegebiet nahe Senaki-Kolkhi
+    "ctld_drop":    (-292000, 640000),   # Vorposten am Brueckenkopf (Kueste, Raum Poti/Samtredia)
+    "csar_zone":    (-250000, 630000),   # Absetzstelle der Besatzung, Vorberge nordwestlich von Senaki
+    "mash":         (-281000, 646500),   # Rettungsstation am Flugplatz Senaki-Kolkhi
     # Wetter/Zeit (fest, klar)
     # Koalitionen: BLUE = USA, RED = Russland
     # Spieler-Slots (Client, BLUE): F/A-18C, F-16C (Kobuleti); AH-64D, Mi-24P (Senaki-Kolkhi)
@@ -69,7 +81,7 @@ LOAD_ORDER = [
     "libs/mist.lua", "libs/Moose.lua", "libs/CTLD-i18n.lua", "libs/CTLD.lua",
     "scripts/00_config.lua", "scripts/01_core.lua", "scripts/02_audio.lua", "scripts/03_menu.lua",
     "scripts/10_sead.lua", "scripts/20_strike.lua", "scripts/30_ag.lua", "scripts/40_cc.lua",
-    "scripts/99_init.lua",
+    "scripts/80_ambient.lua", "scripts/99_init.lua",
 ]
 
 
@@ -78,8 +90,9 @@ def P(m, key_or_xy, dx=0, dy=0):
     return Point(x + dx, y + dy, m.terrain)
 
 
-def build(sounds_dir, out_path, extras=None):
-    """extras: optional dict(kneeboards={Typ-ID: [PNG]}, pictures=[PNG]) fuer Phase 2."""
+def build(sounds_dir, out_path, extras=None, mission=None, libs_dir=None, allow_missing_libs=False):
+    """extras: optional dict(kneeboards={Typ-ID: [PNG]}, pictures=[PNG]) fuer Phase 2.
+    mission: optional Missionsdefinition aus tools/missions.py -> Slots, Skript-Trigger, Goals (tools/mission_builder.py)."""
     extras = extras or {}
     m = Mission(Caucasus())
     cfg = briefing.load_cfg()
@@ -168,6 +181,14 @@ def build(sounds_dir, out_path, extras=None):
     ground_template("TRN_CC_AAA_1", "cc_zone", [AD.ZSU_23_4_Shilka] * 2, dy=-1800)
     ground_template("TRN_CC_AAA_2", "cc_zone", [AD.Strela_10M3] * 2, dy=-1750)
 
+    # ---------------------------------------------------------------- Zone 5: TRANSPORT (CTLD), Zone 6: CSAR
+    zone("TRN_CTLD_LOAD", "ctld_load", 400)
+    zone("TRN_CTLD_DROP", "ctld_drop", 400)
+    zone("TRN_CSAR_ZONE", "csar_zone", 1500)
+    zone("TRN_MASH", "mash", 500)
+    ground_template("TRN_CTLD_TROOPS", "ctld_load", [vehicles.Infantry.Soldier_M4] * 4, country=usa, dy=-600)
+    ground_template("TRN_CSAR_PILOT", "csar_zone", [vehicles.Infantry.Soldier_M4], country=usa, dy=-600)
+
     # ---------------------------------------------------------------- Flugplaetze der Spieler: BLUE
     for name in ("Kobuleti", "Senaki-Kolkhi", "Kutaisi", "Batumi"):
         m.terrain.airports[name].set_blue()
@@ -204,7 +225,16 @@ def build(sounds_dir, out_path, extras=None):
         zone(f"TRN_CONV_{letter}", key, 800)
     zone("TRN_CONV_RED_A", "conv_red_a", 800)
     zone("TRN_CONV_RED_B", "conv_red_b", 800)
-    # (Konvois werden per Skript gesetzt, keine statischen Vorlagen noetig)
+    # Konvoi-Vorlagen (Late Activation): scripts/80_ambient.lua spawnt sie und schickt sie ueber die Strasse
+    ground_template("TRN_CONVOY_BLUE_1", "conv_a", [U.M978_HEMTT_Tanker, U.M_818, U.M_818], country=usa, dy=-1000)
+    ground_template("TRN_CONVOY_BLUE_2", "conv_a", [U.Hummer, U.M_818, U.M978_HEMTT_Tanker, U.Hummer], country=usa, dy=-1100)
+    ground_template("TRN_CONVOY_RED_1", "conv_red_a", [A.BMP_2, U.Ural_375, U.Ural_375], dy=-1000)
+    ground_template("TRN_CONVOY_RED_2", "conv_red_a", [A.BMP_2, U.KAMAZ_Truck, U.KAMAZ_Truck, A.BMP_2], dy=-1100)
+
+    # ---------------------------------------------------------------- Kampagnenmission
+    if mission:
+        import mission_builder
+        mission_builder.apply_mission(m, usa, POS, mission, libs_dir or ROOT / "libs", allow_missing_libs)
 
     # ---------------------------------------------------------------- Speichern
     out_path.parent.mkdir(parents=True, exist_ok=True)

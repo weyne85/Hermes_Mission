@@ -75,9 +75,9 @@ TRN.CFG = {
     startZone = "TRN_AG_START",        -- Triggerzone: Startpunkte der Zielfahrzeuge (an einer Straße)
     endZone = "TRN_AG_END",            -- Triggerzone: Ziel (an einer Straße, >= 8 km von Start)
     levels = {
-      EASY   = { pool = { "TRN_AG_VEH_1", "TRN_AG_VEH_2" }, count = 1,  escorts = {} },
-      MEDIUM = { pool = { "TRN_AG_VEH_1", "TRN_AG_VEH_2", "TRN_AG_VEH_3" }, count = 2, escorts = {} },
-      HARD   = { pool = { "TRN_AG_VEH_1", "TRN_AG_VEH_2", "TRN_AG_VEH_3", "TRN_AG_VEH_4" }, count = 2,
+      EASY   = { pool = { "TRN_AG_VEH_1", "TRN_AG_VEH_2" }, count = 1,  speedKmh = 20, escorts = {} },
+      MEDIUM = { pool = { "TRN_AG_VEH_1", "TRN_AG_VEH_2", "TRN_AG_VEH_3" }, count = 2, speedKmh = 35, escorts = {} },
+      HARD   = { pool = { "TRN_AG_VEH_1", "TRN_AG_VEH_2", "TRN_AG_VEH_3", "TRN_AG_VEH_4" }, count = 2, speedKmh = 50,
                  escorts = { "TRN_AG_AAA_1" } },
     },
   },
@@ -103,6 +103,48 @@ TRN.CFG = {
                  escorts = { "TRN_CC_AAA_1", "TRN_CC_AAA_2" } },
     },
     radarAttributes = { "SAM SR", "SAM TR" },
+  },
+
+  -- ================================================================
+  -- Zone 5: Transport (Moose CTLD): Truppen im Ladegebiet aufnehmen und im Abwurfgebiet absetzen (Hubschrauber)
+  -- ================================================================
+  TRANSPORT = {
+    id = "TRANSPORT",
+    title = "5 Transport (CTLD)",
+    zone = "TRN_CTLD_DROP",            -- fuer Info und Markierung
+    roundTimeout = 2400,               -- Sekunden je Runde
+    loadZone = "TRN_CTLD_LOAD",        -- Triggerzone: Truppen aufnehmen
+    dropZone = "TRN_CTLD_DROP",        -- Triggerzone: Truppen absetzen (Vorposten)
+    pilotPrefixes = { "Mi-24P Client", "AH-64D Client" },   -- Gruppennamen-Praefixe mit CTLD-Menue
+    cargoName = "Infanterie-Trupp",
+    troopTemplate = "TRN_CTLD_TROOPS", -- Late-Activation-Gruppe der Truppen
+    troopsPerLoad = 4,                 -- Soldaten je Ladung (Mi-24P traegt 8, AH-64D nur 2)
+    levels = {
+      EASY   = { troops = 4, escorts = {} },
+      MEDIUM = { troops = 8, escorts = {} },
+      HARD   = { troops = 8, escorts = { "TRN_AG_AAA_1" } },
+    },
+  },
+
+  -- ================================================================
+  -- Zone 6: CSAR (Moose CSAR): abgeschossene Besatzung bergen und zum Flugplatz/MASH bringen (Hubschrauber)
+  -- ================================================================
+  RESCUE = {
+    id = "RESCUE",
+    title = "6 CSAR",
+    zone = "TRN_CSAR_ZONE",            -- Triggerzone: hier wird die Besatzung abgesetzt
+    roundTimeout = 2400,               -- Sekunden je Runde
+    pilotZone = "TRN_CSAR_ZONE",
+    mash = "TRN_MASH",                 -- Triggerzone: Rettungsstation (Praefix fuer Moose CSAR)
+    pilotTemplate = "TRN_CSAR_PILOT",  -- Late-Activation-Einzelsoldat
+    heliPrefixes = { "Mi-24P Client", "AH-64D Client" },
+    pilotName = "Falke 1-1",
+    pilotType = "F-16C",
+    levels = {
+      EASY   = { escorts = {} },
+      MEDIUM = { escorts = { "TRN_CC_AAA_1" } },
+      HARD   = { escorts = { "TRN_CC_AAA_1", "TRN_CC_AAA_2" } },
+    },
   },
 
   -- ================================================================
@@ -158,9 +200,22 @@ TRN.CFG = {
     -- zone AG
     ag_briefing     = { dur = 6, text = "Ground targets in the area. Destroy the convoy as briefed." },
     ag_hit          = { dur = 3, text = "Vehicle destroyed." },
+    ag_escaped      = { dur = 5, text = "A vehicle reached the end line. Exercise failed." },
     ag_complete     = { dur = 5, text = "Column destroyed. Air-to-ground exercise finished." },
     -- zone CC
     cc_briefing     = { dur = 6, text = "Combined threat in the area. Select SEAD or STRIKE via the F10 menu." },
+    -- zone TR (Transport)
+    tr_briefing     = { dur = 6, text = "Transport task. Load troops in the loading area and deploy them at the outpost." },
+    tr_delivered    = { dur = 4, text = "Troops delivered." },
+    tr_complete     = { dur = 5, text = "Outpost reinforced. Transport task complete." },
+    -- zone RS (CSAR)
+    rs_briefing     = { dur = 6, text = "Rescue task. Find the downed crew, pick them up and bring them to the airfield." },
+    rs_down         = { dur = 6, text = "Crew down." },
+    rs_rescued      = { dur = 5, text = "Crew rescued. Rescue task complete." },
+    rs_lost         = { dur = 5, text = "The crew was lost." },
+    mayday          = { dur = 6, text = "MAYDAY, MAYDAY! Aircraft shot down, crew ejected." },
+    cc_sead_complete   = { dur = 4, text = "SEAD target destroyed." },
+    cc_strike_complete = { dur = 4, text = "All strike targets destroyed." },
     cc_splash       = { dur = 3, text = "Splash one." },
     cc_complete     = { dur = 5, text = "Objective complete. New round starting shortly." },
   },

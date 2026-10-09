@@ -176,6 +176,44 @@ function TRN.DestroyGroup(groupName)
   if g and g:isExist() then pcall(function() g:destroy() end) end
 end
 
+-- Fahrbefehl fuer eine Bodengruppe: von "from" nach "to" ueber die Strasse
+-- (from/to = vec2 { x =, y = }, speedMs in m/s). Rueckgabe: true oder false, Grund
+function TRN.SendRoute(groupName, from, to, speedMs)
+  local g = Group and Group.getByName(groupName)
+  if not g or not g:isExist() then return false, "group missing" end
+  local function wp(p)
+    return {
+      x = p.x, y = p.y, type = "Turning Point", action = "On Road",
+      speed = speedMs, speed_locked = true, ETA = 0, ETA_locked = false,
+      alt = 0, alt_type = "BARO", formation_template = "",
+      task = { id = "ComboTask", params = { tasks = {} } },
+    }
+  end
+  local ok, err = pcall(function()
+    g:getController():setTask({ id = "Mission", params = { route = { points = { wp(from), wp(to) } } } })
+  end)
+  if not ok then return false, tostring(err) end
+  return true
+end
+
+-- Missionsmodus: Zonen starten selbst (siehe 70_mission.lua), kein F10-Startmenue
+function TRN.IsMissionMode()
+  return TRN.MISSION ~= nil and TRN.MISSION.autostart ~= false
+end
+
+-- Spieler einer Session: mit Besitzer nur dessen Gruppe, ohne Besitzer (Missionsmodus) alle Spielergruppen.
+-- Rueckgabe: Liste { name = Gruppenname, unit = DCS-Unit }
+function TRN.SessionPlayers(s)
+  local out = {}
+  if s.group then
+    local u = TRN.PlayerUnit(s.group)
+    if u then out[1] = { name = s.group, unit = u } end
+  else
+    for name, p in pairs(TRN.PlayerGroups()) do out[#out + 1] = { name = name, unit = p.unit } end
+  end
+  return out
+end
+
 -- ----------------------------------------------------------------------
 -- Zonen-Verwaltung
 --
@@ -194,7 +232,18 @@ local Session = {}
 Session.__index = Session
 
 function Session:Say(key, extra)
-  if TRN.Audio then TRN.Audio.Say(self.group, key, extra) end
+  if not TRN.Audio then return end
+  if self.group then
+    TRN.Audio.Say(self.group, key, extra)
+  else
+    TRN.Audio.SayAll(key, extra)
+  end
+end
+
+-- Freier Text an den Besitzer bzw. (ohne Besitzer) an alle Spielergruppen
+local function tell(s, text)
+  if not TRN.Audio then return end
+  if s.group then TRN.Audio.Text(s.group, text) else TRN.Audio.TextAll(text) end
 end
 
 function Session:Track(groupName)
@@ -262,27 +311,48 @@ function Zone:_newRound()
   if s.cfg and s.cfg.levels then            -- Schwierigkeitsstufe aufloesen (s.lv)
     s.lv = s.cfg.levels[s.level]
     if not s.lv then
-      TRN.Audio.Text(s.group, "Setup error: unknown difficulty " .. tostring(s.level))
-      self:Stop(true)
+      tell(s, "Setup error: unknown difficulty " .. tostring(s.level))
+      self:_abort(s)
       return
     end
   end
   local ok, res, err = pcall(self.def.OnRound, s)
   if not ok then
     TRN.Error("OnRound %s: %s", self.def.id, tostring(res))
-    if TRN.Audio then TRN.Audio.Text(s.group, "Setup error in zone " .. self.def.title .. ". See dcs.log.") end
-    self:Stop(true)
+    tell(s, "Setup error in zone " .. self.def.title .. ". See dcs.log.")
+    self:_abort(s)
   elseif res == false then
-    if TRN.Audio then TRN.Audio.Text(s.group, "Setup error: " .. tostring(err or "unknown")) end
-    self:Stop(true)
+    tell(s, "Setup error: " .. tostring(err or "unknown"))
+    self:_abort(s)
+  end
+end
+
+-- Setup- oder Laufzeitfehler: Zone beenden. Einmal-Sessions (Missionsmodus) melden "error" an onFinish.
+function Zone:_abort(s)
+  local cb = s.single and s.onFinish
+  self:Stop(true)
+  if cb then pcall(cb, "error", s) end
+end
+
+-- Beendet eine Einmal-Session (Missionsmodus): Timer aus, Ziele und Wracks bleiben stehen.
+-- result: "win" | "fail" | "timeout" | "aborted" (von aussen). onFinish(result, session) wird einmal aufgerufen.
+function Zone:Finish(result)
+  local s = self.session
+  if not s or s.state == "FINISHED" then return end
+  s.state = "FINISHED"
+  if self.timer then self.timer:Stop(); self.timer = nil end
+  TRN.Log("Zone %s finished: %s", self.def.id, tostring(result))
+  if s.onFinish then
+    local ok, err = pcall(s.onFinish, result, s)
+    if not ok then TRN.Error("onFinish %s: %s", self.def.id, tostring(err)) end
   end
 end
 
 function Zone:_tick()
   local s = self.session
-  if not s then return false end
+  if not s or s.state == "FINISHED" then return false end
 
-  if not TRN.IsPlayerGroupAlive(s.group) then
+  if s.group and not TRN.IsPlayerGroupAlive(s.group) then
     TRN.Log("Zone %s: owner group %s gone, closing", self.def.id, s.group)
     self:Stop()
     return false
@@ -296,18 +366,22 @@ function Zone:_tick()
   local limit = s.cfg and s.cfg.roundTimeout
   if limit and s:Elapsed() > limit then
     s:Say("zone_timeout")
-    self:Stop()
+    if s.single then self:Finish("timeout") else self:Stop() end
     return false
   end
 
   local ok, res = pcall(self.def.OnTick, s)
   if not ok then                            -- Fehler in der Zone: beenden statt jede Runde neu zu loggen
     TRN.Error("OnTick %s: %s", self.def.id, tostring(res))
-    TRN.Audio.Text(s.group, "Error in zone " .. self.def.title .. ". Exercise stopped. See dcs.log.")
-    self:Stop(true)
+    tell(s, "Error in zone " .. self.def.title .. ". Exercise stopped. See dcs.log.")
+    self:_abort(s)
     return false
   end
-  if res == "done" then
+  if (res == "done" or res == "failed") and s.single then
+    self:Finish(res == "done" and "win" or "fail")
+    return false
+  end
+  if res == "done" or res == "failed" then
     s.state = "WAIT"
     s.restartAt = timer.getTime() + CFG.RESTART_DELAY
     -- Aufraeumen erst beim naechsten Rundenstart, damit Wracks/Ziele sichtbar bleiben
@@ -315,7 +389,9 @@ function Zone:_tick()
 end
 
 -- Startet eine Session. Rueckgabe: true oder false, Grund
-function Zone:Start(groupName, level, mode)
+-- groupName = nil: Session ohne Besitzer (Missionsmodus), Ansagen gehen an alle Spielergruppen.
+-- opts (optional): { single = true, onFinish = fn(result, session) } -> genau eine Runde, kein Auto-Restart.
+function Zone:Start(groupName, level, mode, opts)
   if self.session then
     if self.session.group == groupName then
       -- eigene Session neu starten
@@ -329,8 +405,10 @@ function Zone:Start(groupName, level, mode)
     zone = self, id = self.def.id, group = groupName, level = level, mode = mode,
     cfg = self.def.cfg, tracked = {}, rounds = 0, roundStart = timer.getTime(),
     state = "RUN", data = {},
+    single = opts and opts.single or false, onFinish = opts and opts.onFinish or nil,
   }, Session)
-  TRN.Log("Zone %s started by %s (level %s%s)", self.def.id, groupName, tostring(level), mode and (" " .. mode) or "")
+  TRN.Log("Zone %s started by %s (level %s%s)", self.def.id, tostring(groupName or "MISSION"), tostring(level),
+    mode and (" " .. mode) or "")
   self:_newRound()
   if self.session then
     self.timer = TRN.Every(CFG.TICK, function() return self:_tick() end)

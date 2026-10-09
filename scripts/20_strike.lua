@@ -34,6 +34,12 @@ local function countTargets(level)
   return C.numTargets
 end
 
+local function targetType(groupName)
+  local units = TRN.GroupAliveUnits(groupName)
+  if units[1] then return units[1]:getTypeName() end
+  return "unknown"
+end
+
 function def.OnRound(s)
   local lv = s.lv
   s.data.targets = {}
@@ -63,12 +69,6 @@ function def.OnRound(s)
 
   s:Say("st_briefing", s:RoundTag() .. table.concat(lines, "\n"))
   return true
-end
-
-local function targetType(groupName)
-  local units = TRN.GroupAliveUnits(groupName)
-  if units[1] then return units[1]:getTypeName() end
-  return "unknown"
 end
 
 function def.OnTick(s)

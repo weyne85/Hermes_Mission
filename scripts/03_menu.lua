@@ -63,6 +63,7 @@ local function buildMenu(groupName)
 
   local root = MENU_GROUP:New(g, CFG.MENU_ROOT)
   MENU_GROUP_COMMAND:New(g, "Help", root, function() say(groupName, HELP_TEXT) end)
+  if TRN.IsMissionMode() then return true end   -- Missionsmodus: Zonen starten selbst, kein Startmenue
 
   for _, id in ipairs(TRN.ZoneOrder) do
     local z = TRN.Zones[id]
@@ -115,7 +116,7 @@ local function scan()
       if ok and built then
         known[name] = true
         TRN.Log("menu built for group %s", name)
-        TRN.Audio.Say(name, "welcome")
+        if not TRN.IsMissionMode() then TRN.Audio.Say(name, "welcome") end
       elseif not ok then
         TRN.Error("menu build failed for %s: %s", name, tostring(built))
         known[name] = true   -- nicht endlos wiederholen
